@@ -1,11 +1,19 @@
 // src/App.js - CUSTOM LOGIN VERSION WITH GOOGLE API GATEWAY INTEGRATION
 import React, { useState } from "react";
 
-// 🔐 REPLACE THESE VALUES
-const CLIENT_ID = "your-client-id-here";
-const CLIENT_SECRET = "your-client-secret-here"; // ← ONLY FOR DEMO
-const ENVIRONMENT_ID = "your-env-id-here";
-const TOKEN_URL = `https://auth.pingone.com/${ENVIRONMENT_ID}/as/token.oauth2`;
+// 🔐 YOUR ACTUAL VALUES
+const CLIENT_ID = "758d1935-49b8-4964-acd2-f1fb2e556631";
+const CLIENT_SECRET ="8MqdGkGZW8UvQbQcMotcf.mPUTo0bZF0.kO.CVwxUht4ybCXZLvOkECzjlpXMY12";
+const ENVIRONMENT_ID = "627d28bb-357b-4a7b-a885-5eb6ae915663";
+
+// 🛡️ AUTHENTICATION POLICIES
+const POLICIES = {
+  SINGLE_FACTOR: "f5189cff-a390-491a-948f-f7819204a2f4",
+  MULTI_FACTOR: "7cfb5786-1376-4b53-b088-7952eace895b"
+};
+
+// ✅ FIXED: Removed extra spaces
+const TOKEN_URL = `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/token`;
 
 // 🌐 GOOGLE API GATEWAY CONFIGURATION
 const GOOGLE_API_GATEWAY_URL = "https://camara-gateway-35st6xqt.uc.gateway.dev";
@@ -14,10 +22,90 @@ function App() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [accessToken, setAccessToken] = useState("");
+  const [refreshToken, setRefreshToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [apiValidationResult, setApiValidationResult] = useState("");
+  const [useMFA, setUseMFA] = useState(false);
 
+  // Step 1: Request Device Authorization with CORRECT authentication method
+  const requestDeviceAuthorization = async () => {
+    try {
+      const bodyParams = new URLSearchParams({
+        scope: "openid profile email device.read session.read",
+        client_id: CLIENT_ID,        // ✅ Send in body for Client Secret Post
+        client_secret: CLIENT_SECRET, // ✅ Send in body for Client Secret Post
+      });
+
+      // Add MFA policy if requested
+      if (useMFA) {
+        bodyParams.append("acr_values", "Multi_Factor");
+      }
+
+      const response = await fetch(
+        `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/device_authorization`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: bodyParams, // ✅ Credentials in body, not header
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Device authorization failed: ${await response.text()}`);
+      }
+
+      const deviceAuth = await response.json();
+      return deviceAuth;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  // Step 2: Poll for Token
+  const pollForToken = async (deviceCode, interval = 5000) => {
+    try {
+      const response = await fetch(TOKEN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+          device_code: deviceCode,
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        if (text.includes("authorization_pending")) {
+          setTimeout(() => pollForToken(deviceCode, interval), interval);
+          return;
+        }
+        throw new Error(`Token request failed: ${text}`);
+      }
+
+      const tokens = await response.json();
+      const accessToken = tokens.access_token;
+      const refreshToken = tokens.refresh_token;
+      
+      // ✅ SET THE JWT TOKEN - This is what you want!
+      setAccessToken(accessToken);
+      setRefreshToken(refreshToken);
+
+      // Test API Gateway with the JWT token
+      await testApiEndpoints(accessToken);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Step 3: Login Function
   const login = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -25,40 +113,12 @@ function App() {
     setApiValidationResult("");
 
     try {
-      // Encode credentials
-      const credentials = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
+      const deviceAuth = await requestDeviceAuthorization();
+      pollForToken(deviceAuth.device_code);
 
-      // Prepare form data
-      const body = new URLSearchParams({
-        grant_type: "password",
-        username: username,
-        password: password,
-        scope: "openid profile email device.read session.read",
-      });
-
-      // Call Ping Identity token endpoint
-      const response = await fetch(TOKEN_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Basic ${credentials}`,
-        },
-        body: body,
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Login failed: ${response.status} ${await response.text()}`
-        );
-      }
-
-      const tokens = await response.json();
-      const accessToken = tokens.access_token;
-
-      setAccessToken(accessToken);
-
-      // NEW: Test Google API Gateway endpoints with the token
-      await testApiEndpoints(accessToken);
+      // Show user instructions with MFA info
+      const mfaInfo = useMFA ? " (MFA Required)" : "";
+      alert(`Please go to ${deviceAuth.verification_uri} and enter code: ${deviceAuth.user_code}${mfaInfo}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -66,22 +126,50 @@ function App() {
     }
   };
 
-  // NEW FUNCTION: Test actual API endpoints with the token
+  // NEW FUNCTION: Refresh Access Token
+  const refreshAccessToken = async () => {
+    try {
+      const response = await fetch(TOKEN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Refresh failed: ${await response.text()}`);
+      }
+
+      const tokens = await response.json();
+      const accessToken = tokens.access_token;
+      setAccessToken(accessToken); // ✅ Update token display
+      await testApiEndpoints(accessToken);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // NEW FUNCTION: Test actual API endpoints with the JWT token
   const testApiEndpoints = async (token) => {
     const testRequestBody = {
       device: {
-        phoneNumber: "+1234567890", // Example phone number
+        phoneNumber: "+1234567890",
       },
     };
 
     try {
-      // Test the retrieve-identifier endpoint
       const response = await fetch(
         `${GOOGLE_API_GATEWAY_URL}/device-identifier/retrieve-identifier`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${token}`, // ✅ Sending JWT token to API Gateway
             "Content-Type": "application/json",
           },
           body: JSON.stringify(testRequestBody),
@@ -107,6 +195,7 @@ function App() {
 
   const logout = () => {
     setAccessToken("");
+    setRefreshToken("");
     setUsername("");
     setPassword("");
     setApiValidationResult("");
@@ -145,6 +234,20 @@ function App() {
                 {error}
               </div>
             )}
+
+            {/* MFA Toggle */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="mfaToggle"
+                checked={useMFA}
+                onChange={(e) => setUseMFA(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="mfaToggle" className="ml-2 block text-sm text-gray-700">
+                Require Multi-Factor Authentication (MFA)
+              </label>
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -204,7 +307,7 @@ function App() {
                   <span>Logging in...</span>
                 </>
               ) : (
-                <span>Login</span>
+                <span>{useMFA ? "Login with MFA" : "Login"}</span>
               )}
             </button>
           </form>
@@ -228,9 +331,12 @@ function App() {
                 </svg>
               </div>
               <h2 className="text-xl font-semibold text-gray-800">Welcome!</h2>
-              <p className="text-gray-600 text-sm">Login successful</p>
+              <p className="text-gray-600 text-sm">
+                Login successful {useMFA && "🔐 (MFA Enabled)"}
+              </p>
             </div>
 
+            {/* ✅ JWT TOKEN DISPLAY - This is what you want! */}
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-medium text-gray-800 mb-2">
                 JWT Access Token
@@ -238,9 +344,12 @@ function App() {
               <pre className="text-xs bg-white p-3 rounded border overflow-x-auto text-gray-700 whitespace-pre-wrap break-words">
                 {accessToken}
               </pre>
+              <p className="text-xs text-gray-500 mt-2">
+                This JWT token is automatically sent to Google API Gateway below
+              </p>
             </div>
 
-            {/* NEW: API Gateway Validation Result */}
+            {/* API Gateway Validation Result */}
             {apiValidationResult && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-medium text-gray-800 mb-2">
@@ -250,12 +359,21 @@ function App() {
               </div>
             )}
 
-            <button
-              onClick={logout}
-              className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
-            >
-              Logout
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={refreshAccessToken}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
+              >
+                Refresh Token
+              </button>
+              
+              <button
+                onClick={logout}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         )}
 
