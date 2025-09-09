@@ -1,4 +1,4 @@
-// src/App.js - CUSTOM LOGIN VERSION
+// src/App.js - CUSTOM LOGIN VERSION WITH GOOGLE API GATEWAY INTEGRATION
 import React, { useState } from "react";
 
 // 🔐 REPLACE THESE VALUES
@@ -7,17 +7,22 @@ const CLIENT_SECRET = "your-client-secret-here"; // ← ONLY FOR DEMO
 const ENVIRONMENT_ID = "your-env-id-here";
 const TOKEN_URL = `https://auth.pingone.com/${ENVIRONMENT_ID}/as/token.oauth2`;
 
+// 🌐 GOOGLE API GATEWAY CONFIGURATION
+const GOOGLE_API_GATEWAY_URL = "https://camara-gateway-35st6xqt.uc.gateway.dev";
+
 function App() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [apiValidationResult, setApiValidationResult] = useState("");
 
   const login = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setApiValidationResult("");
 
     try {
       // Encode credentials
@@ -52,13 +57,8 @@ function App() {
 
       setAccessToken(accessToken);
 
-      // Auto-open jwt.io
-      setTimeout(() => {
-        window.open(
-          `https://jwt.io/#id_token=${encodeURIComponent(accessToken)}`,
-          "_blank"
-        );
-      }, 1000);
+      // NEW: Test Google API Gateway endpoints with the token
+      await testApiEndpoints(accessToken);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -66,10 +66,50 @@ function App() {
     }
   };
 
+  // NEW FUNCTION: Test actual API endpoints with the token
+  const testApiEndpoints = async (token) => {
+    const testRequestBody = {
+      device: {
+        phoneNumber: "+1234567890", // Example phone number
+      },
+    };
+
+    try {
+      // Test the retrieve-identifier endpoint
+      const response = await fetch(
+        `${GOOGLE_API_GATEWAY_URL}/device-identifier/retrieve-identifier`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(testRequestBody),
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setApiValidationResult(
+          "✅ API call successful! Token validated by Google API Gateway"
+        );
+        console.log("API Response:", result);
+      } else {
+        const errorText = await response.text();
+        setApiValidationResult(
+          `❌ API call failed (${response.status}): ${errorText}`
+        );
+      }
+    } catch (error) {
+      setApiValidationResult(`❌ API call error: ${error.message}`);
+    }
+  };
+
   const logout = () => {
     setAccessToken("");
     setUsername("");
     setPassword("");
+    setApiValidationResult("");
   };
 
   return (
@@ -199,6 +239,16 @@ function App() {
                 {accessToken}
               </pre>
             </div>
+
+            {/* NEW: API Gateway Validation Result */}
+            {apiValidationResult && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-medium text-gray-800 mb-2">
+                  Google API Gateway Validation
+                </h3>
+                <p className="text-sm text-gray-700">{apiValidationResult}</p>
+              </div>
+            )}
 
             <button
               onClick={logout}
