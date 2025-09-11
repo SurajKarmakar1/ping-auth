@@ -1,15 +1,15 @@
 // src/App.js - CUSTOM LOGIN VERSION WITH GOOGLE API GATEWAY INTEGRATION
 import React, { useState } from "react";
 
-// 🔐 YOUR ACTUAL VALUES
+// 🔐 ACTUAL VALUES
 const CLIENT_ID = "758d1935-49b8-4964-acd2-f1fb2e556631";
 const CLIENT_SECRET ="8MqdGkGZW8UvQbQcMotcf.mPUTo0bZF0.kO.CVwxUht4ybCXZLvOkECzjlpXMY12";
 const ENVIRONMENT_ID = "627d28bb-357b-4a7b-a885-5eb6ae915663";
 
-// 🛡️ AUTHENTICATION POLICIES
+// 🛡️ AUTHENTICATION POLICIES - Use APP policy IDs
 const POLICIES = {
-  SINGLE_FACTOR: "f5189cff-a390-491a-948f-f7819204a2f4",
-  MULTI_FACTOR: "7cfb5786-1376-4b53-b088-7952eace895b"
+  SINGLE_FACTOR: "f5189cff-a390-491a-948f-f7819204a2f4",  // From app
+  MULTI_FACTOR: "7cfb5786-1376-4b53-b088-7952eace895b"   // From app
 };
 
 // ✅ FIXED: Removed extra spaces
@@ -27,19 +27,35 @@ function App() {
   const [error, setError] = useState("");
   const [apiValidationResult, setApiValidationResult] = useState("");
   const [useMFA, setUseMFA] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationInfo, setVerificationInfo] = useState({ uri: '', code: '' });
+
+  // Helper function to get ACR value from token
+  const getAcrFromToken = (token) => {
+    try {
+      const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+      return tokenPayload.acr || "Not specified";
+    } catch (e) {
+      return "Could not decode";
+    }
+  };
 
   // Step 1: Request Device Authorization with CORRECT authentication method
   const requestDeviceAuthorization = async () => {
     try {
       const bodyParams = new URLSearchParams({
         scope: "openid profile email device.read session.read",
-        client_id: CLIENT_ID,        // ✅ Send in body for Client Secret Post
-        client_secret: CLIENT_SECRET, // ✅ Send in body for Client Secret Post
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
       });
 
-      // Add MFA policy if requested
+      // Add authentication policy based on MFA setting
       if (useMFA) {
-        bodyParams.append("acr_values", "Multi_Factor");
+        bodyParams.append("acr_values", POLICIES.MULTI_FACTOR);
+        console.log("Requesting MFA authentication with policy:", POLICIES.MULTI_FACTOR);
+      } else {
+        bodyParams.append("acr_values", POLICIES.SINGLE_FACTOR);
+        console.log("Requesting Single-Factor authentication with policy:", POLICIES.SINGLE_FACTOR);
       }
 
       const response = await fetch(
@@ -49,7 +65,7 @@ function App() {
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: bodyParams, // ✅ Credentials in body, not header
+          body: bodyParams,
         }
       );
 
@@ -98,6 +114,10 @@ function App() {
       setAccessToken(accessToken);
       setRefreshToken(refreshToken);
 
+      // Log ACR value for debugging
+      console.log("ACR Value:", getAcrFromToken(accessToken));
+      console.log("Full token payload:", JSON.parse(atob(accessToken.split('.')[1])));
+
       // Test API Gateway with the JWT token
       await testApiEndpoints(accessToken);
     } catch (err) {
@@ -114,11 +134,16 @@ function App() {
 
     try {
       const deviceAuth = await requestDeviceAuthorization();
+      
+      // Show improved verification UI instead of alert
+      setVerificationInfo({
+        uri: deviceAuth.verification_uri,
+        code: deviceAuth.user_code
+      });
+      setShowVerificationModal(true);
+      
+      // Start polling for token
       pollForToken(deviceAuth.device_code);
-
-      // Show user instructions with MFA info
-      const mfaInfo = useMFA ? " (MFA Required)" : "";
-      alert(`Please go to ${deviceAuth.verification_uri} and enter code: ${deviceAuth.user_code}${mfaInfo}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -149,6 +174,9 @@ function App() {
       const tokens = await response.json();
       const accessToken = tokens.access_token;
       setAccessToken(accessToken); // ✅ Update token display
+      
+      console.log("ACR Value (refreshed):", getAcrFromToken(accessToken));
+
       await testApiEndpoints(accessToken);
     } catch (err) {
       setError(err.message);
@@ -193,12 +221,93 @@ function App() {
     }
   };
 
+  // NEW: Better verification modal UI
+  const VerificationModal = () => {
+    if (!showVerificationModal) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="text-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Complete Authentication</h3>
+            <p className="text-gray-600 mb-4">Please verify your identity to continue</p>
+            
+            {/* Verification Link */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-gray-700 mb-2">Visit this link:</p>
+              <a 
+                href={verificationInfo.uri} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 underline break-all text-sm"
+              >
+                {verificationInfo.uri}
+              </a>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(verificationInfo.uri);
+                }}
+                className="ml-2 text-xs text-gray-500 hover:text-gray-700 underline"
+              >
+                Copy Link
+              </button>
+            </div>
+            
+            {/* User Code */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-gray-700 mb-2">Enter this code:</p>
+              <div className="flex items-center justify-center gap-2">
+                <span className="font-mono text-lg font-bold bg-gray-200 px-3 py-2 rounded">
+                  {verificationInfo.code}
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(verificationInfo.code);
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Copy Code
+                </button>
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  window.open(verificationInfo.uri, '_blank');
+                  setShowVerificationModal(false);
+                }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition"
+              >
+                Open in New Tab
+              </button>
+              <button
+                onClick={() => setShowVerificationModal(false)}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition"
+              >
+                  Go back to login page
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const logout = () => {
     setAccessToken("");
     setRefreshToken("");
     setUsername("");
     setPassword("");
     setApiValidationResult("");
+    setShowVerificationModal(false);
   };
 
   return (
@@ -260,6 +369,7 @@ function App() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-ping"
                 placeholder="demo@camara.test"
                 required
+                autoComplete="username" // ✅ Accessibility improvement
               />
             </div>
 
@@ -274,6 +384,7 @@ function App() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-ping"
                 placeholder="CamaraDemo123!"
                 required
+                autoComplete="current-password" // ✅ Accessibility improvement
               />
             </div>
 
@@ -334,6 +445,10 @@ function App() {
               <p className="text-gray-600 text-sm">
                 Login successful {useMFA && "🔐 (MFA Enabled)"}
               </p>
+              {/* ✅ Display ACR value directly from token */}
+              <p className="text-gray-600 text-sm mt-1">
+                Authentication Level: <span className="font-semibold">{getAcrFromToken(accessToken)}</span>
+              </p>
             </div>
 
             {/* ✅ JWT TOKEN DISPLAY - This is what you want! */}
@@ -382,6 +497,9 @@ function App() {
           <p className="mt-1">Custom Login Demo (Not for Production)</p>
         </div>
       </div>
+      
+      {/* Verification Modal */}
+      <VerificationModal />
     </div>
   );
 }
