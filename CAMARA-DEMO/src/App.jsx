@@ -12,11 +12,11 @@ const POLICIES = {
   MULTI_FACTOR: "72c165e4-ebf4-486d-aaee-973ee2093949"   // From app
 };
 
-// ✅ FIXED: Removed extra spaces
+
 const TOKEN_URL = `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/token`;
 
 // 🌐 GOOGLE API GATEWAY CONFIGURATION
-const GOOGLE_API_GATEWAY_URL = "https://camara-gateway-35st6xqt.uc.gateway.dev";
+const GOOGLE_API_GATEWAY_URL = "https://camara-gateway-35st6xqt.uc.gateway.dev/device-identifier/retrieve-identifier";
 
 function App() {
   const [username, setUsername] = useState("");
@@ -59,7 +59,7 @@ function App() {
       }
 
       const response = await fetch(
-        `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/device_authorization`, // ✅ Fixed URL
+        `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/device_authorization`, // 
         {
           method: "POST",
           headers: {
