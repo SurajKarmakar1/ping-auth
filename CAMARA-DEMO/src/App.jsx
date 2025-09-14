@@ -42,6 +42,7 @@ function App() {
 
   // Step 1: Request Device Authorization with CORRECT authentication method
  
+// Update the requestDeviceAuthorization function
 const requestDeviceAuthorization = async () => {
   try {
     const bodyParams = new URLSearchParams({
@@ -84,10 +85,10 @@ const requestDeviceAuthorization = async () => {
     throw err;
   }
 };
-
   // Step 2: Poll for Token
 
-const pollForToken = async (deviceCode, interval = 5000) => {
+// Update the pollForToken function
+const pollForToken = async (deviceCode, interval = 5000, attempt = 0) => {
   try {
     const response = await fetch(TOKEN_URL, {
       method: "POST",
@@ -109,11 +110,16 @@ const pollForToken = async (deviceCode, interval = 5000) => {
       // Handle specific OAuth 2.0 device flow errors
       if (errorData.error === "authorization_pending") {
         console.log("Authorization pending, continuing to poll...");
-        setTimeout(() => pollForToken(deviceCode, interval), interval);
-        return;
+        // Stop polling after a reasonable number of attempts (e.g., 10 minutes)
+        if (attempt < 120) { // 120 * 5 seconds = 10 minutes
+          setTimeout(() => pollForToken(deviceCode, interval, attempt + 1), interval);
+          return;
+        } else {
+          throw new Error("Authorization timed out. Please try again.");
+        }
       } else if (errorData.error === "slow_down") {
         console.log("Slow down requested, increasing interval...");
-        setTimeout(() => pollForToken(deviceCode, interval * 2), interval);
+        setTimeout(() => pollForToken(deviceCode, interval * 2, attempt + 1), interval);
         return;
       } else if (errorData.error === "expired_token") {
         throw new Error("Device code has expired. Please try logging in again.");
