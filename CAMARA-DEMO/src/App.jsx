@@ -16,7 +16,7 @@ const POLICIES = {
 const TOKEN_URL = `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/token`;
 
 // 🌐 GOOGLE API GATEWAY CONFIGURATION
-const GOOGLE_API_GATEWAY_URL = "https://camara-gateway-35st6xqt.uc.gateway.dev/device-identifier/retrieve-identifier";
+const GOOGLE_API_GATEWAY_URL = "https://camara-gateway-35st6xqt.uc.gateway.dev";
 
 function App() {
   const [username, setUsername] = useState("");
