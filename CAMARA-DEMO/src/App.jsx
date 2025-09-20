@@ -1,11 +1,9 @@
-// src/App.js - CUSTOM LOGIN VERSION WITH GOOGLE API GATEWAY INTEGRATION
 import React, { useState } from "react";
 import Header from "./components/Header";
+import Footer from "./components/Footer";
 import LoginForm from "./components/LoginForm";
 import SuccessSection from "./components/SuccessSection";
-
 import VerificationModal from "./components/VerificationModal";
-import Footer from "./components/Footer";
 
 // 🔐 ACTUAL VALUES
 const CLIENT_ID = "b08b52a2-ee2e-430e-8e93-8e9c794d443d";
@@ -18,7 +16,6 @@ const POLICIES = {
   MULTI_FACTOR: "72c165e4-ebf4-486d-aaee-973ee2093949"   // From app
 };
 
-
 const TOKEN_URL = `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/token`;
 
 // 🌐 GOOGLE API GATEWAY CONFIGURATION
@@ -26,13 +23,19 @@ const GOOGLE_API_GATEWAY_URL = "https://camara-gateway-35st6xqt.uc.gateway.dev";
 
 function App() {
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [useMFA, setUseMFA] = useState(false);
   const [accessToken, setAccessToken] = useState("");
   const [refreshToken, setRefreshToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [apiValidationResult, setApiValidationResult] = useState("");
-  const [useMFA, setUseMFA] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("+1234567890");
+
+  // Device Identifier API results
+  const [identifierResult, setIdentifierResult] = useState(null);
+  const [typeResult, setTypeResult] = useState(null);
+  const [ppidResult, setPpidResult] = useState(null);
+
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationInfo, setVerificationInfo] = useState({ uri: '', code: '' });
 
@@ -55,7 +58,7 @@ function App() {
       }
 
       const response = await fetch(
-        `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/device_authorization`, // 
+        `https://auth.pingone.sg/${ENVIRONMENT_ID}/as/device_authorization`, 
         {
           method: "POST",
           headers: {
@@ -103,15 +106,19 @@ function App() {
       }
 
       const tokens = await response.json();
-      const accessToken = tokens.access_token;
-      const refreshToken = tokens.refresh_token;
+      const accessTokenVal = tokens.access_token;
+      const refreshTokenVal = tokens.refresh_token;
       
       // ✅ SET THE JWT TOKEN - This is what you want!
-      setAccessToken(accessToken);
-      setRefreshToken(refreshToken);
+      setAccessToken(accessTokenVal);
+      setRefreshToken(refreshTokenVal || "");
 
-      // Test API Gateway with the JWT token
-      await testApiEndpoints(accessToken);
+      setApiValidationResult("✅ User login successful!");
+      // Reset device results on login
+      setIdentifierResult(null);
+      setTypeResult(null);
+      setPpidResult(null);
+      setShowVerificationModal(false);
     } catch (err) {
       setError(err.message);
     }
@@ -137,26 +144,33 @@ function App() {
       // Start polling for token
       pollForToken(deviceAuth.device_code);
     } catch (err) {
-      setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
 
+  const handleMFAChange = (e) => {
+    setUseMFA(e.target.checked);
+  };
+
   // NEW FUNCTION: Refresh Access Token
   const refreshAccessToken = async () => {
+    if (!refreshToken) return;
+
+    setLoading(true);
     try {
+      const bodyParams = new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: refreshToken,
+      });
+
       const response = await fetch(TOKEN_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          refresh_token: refreshToken,
-          client_id: CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-        }),
+        body: bodyParams,
       });
 
       if (!response.ok) {
@@ -164,50 +178,73 @@ function App() {
       }
 
       const tokens = await response.json();
-      const accessToken = tokens.access_token;
-      setAccessToken(accessToken); // ✅ Update token display
-      
-      await testApiEndpoints(accessToken);
+      setAccessToken(tokens.access_token);
+      if (tokens.refresh_token) setRefreshToken(tokens.refresh_token);
+      setApiValidationResult("✅ Token refreshed successfully!");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // NEW FUNCTION: Test actual API endpoints with the JWT token
-  const testApiEndpoints = async (token) => {
-    const testRequestBody = {
-      device: {
-        phoneNumber: "+1234567890",
-      },
-    };
+  // NEW FUNCTION: Test actual API endpoints with the JWT token using user access token
+  const fetchDeviceInfo = async () => {
+    if (!phoneNumber.trim()) {
+      setApiValidationResult("Please enter a valid phone number.");
+      return;
+    }
+
+    setLoading(true);
+    setApiValidationResult("");
 
     try {
-      const response = await fetch(
-        `${GOOGLE_API_GATEWAY_URL}/device-identifier/retrieve-identifier`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`, // ✅ Sending JWT token to API Gateway
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(testRequestBody),
-        }
-      );
+      const deviceBody = {
+        device: { phoneNumber }
+      };
+      const baseUrl = `${GOOGLE_API_GATEWAY_URL}/device-identifier`;
+      const headers = {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      };
 
-      if (response.ok) {
-        const result = await response.json();
-        setApiValidationResult(
-          "✅ API call successful! Token validated by Google API Gateway"
-        );
-        console.log("API Response:", result);
+      const [idRes, typeRes, ppidRes] = await Promise.all([
+        fetch(`${baseUrl}/retrieve-identifier`, { method: "POST", headers, body: JSON.stringify(deviceBody) }),
+        fetch(`${baseUrl}/retrieve-type`, { method: "POST", headers, body: JSON.stringify(deviceBody) }),
+        fetch(`${baseUrl}/retrieve-ppid`, { method: "POST", headers, body: JSON.stringify(deviceBody) }),
+      ]);
+
+      let allSuccess = true;
+
+      if (idRes.ok) {
+        setIdentifierResult(await idRes.json());
       } else {
-        const errorText = await response.text();
-        setApiValidationResult(
-          `❌ API call failed (${response.status}): ${errorText}`
-        );
+        allSuccess = false;
+        setIdentifierResult({ error: `${idRes.status}: ${await idRes.text()}` });
       }
-    } catch (error) {
-      setApiValidationResult(`❌ API call error: ${error.message}`);
+
+      if (typeRes.ok) {
+        setTypeResult(await typeRes.json());
+      } else {
+        allSuccess = false;
+        setTypeResult({ error: `${typeRes.status}: ${await typeRes.text()}` });
+      }
+
+      if (ppidRes.ok) {
+        setPpidResult(await ppidRes.json());
+      } else {
+        allSuccess = false;
+        setPpidResult({ error: `${ppidRes.status}: ${await ppidRes.text()}` });
+      }
+
+      setApiValidationResult(allSuccess ? "✅ All device APIs successful!" : "⚠️ Some APIs failed. Check results below.");
+    } catch (err) {
+      setApiValidationResult(`❌ Network error: ${err.message}`);
+      setIdentifierResult(null);
+      setTypeResult(null);
+      setPpidResult(null);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -215,50 +252,55 @@ function App() {
     setAccessToken("");
     setRefreshToken("");
     setUsername("");
-    setPassword("");
+    setPhoneNumber("+1234567890");
     setApiValidationResult("");
+    setError("");
+    setIdentifierResult(null);
+    setTypeResult(null);
+    setPpidResult(null);
+    setUseMFA(false);
     setShowVerificationModal(false);
   };
+
+  const onPhoneNumberChange = (e) => setPhoneNumber(e.target.value);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8">
+        <Header />
         {!accessToken ? (
-          <>
-            <Header />
-            <LoginForm
-              username={username}
-              password={password}
-              useMFA={useMFA}
-              onUsernameChange={(e) => setUsername(e.target.value)}
-              onPasswordChange={(e) => setPassword(e.target.value)}
-              onMFAChange={(e) => setUseMFA(e.target.checked)}
-              onSubmit={login}
-              loading={loading}
-              error={error}
-            />
-          </>
+          <LoginForm
+            username={username}
+            onUsernameChange={(e) => setUsername(e.target.value)}
+            useMFA={useMFA}
+            onMFAChange={handleMFAChange}
+            onSubmit={login}
+            loading={loading}
+            error={error}
+          />
         ) : (
           <SuccessSection
             accessToken={accessToken}
             apiValidationResult={apiValidationResult}
-            useMFA={useMFA}
+            phoneNumber={phoneNumber}
+            onPhoneNumberChange={onPhoneNumberChange}
+            identifierResult={identifierResult}
+            typeResult={typeResult}
+            ppidResult={ppidResult}
             onRefreshAccessToken={refreshAccessToken}
+            onFetchDeviceInfo={fetchDeviceInfo}
             onLogout={logout}
+            loading={loading}
+            useMFA={useMFA}
           />
         )}
         <Footer />
       </div>
       
-      {/* Verification Modal */}
       <VerificationModal
         show={showVerificationModal}
-        verificationInfo={verificationInfo}
-        onOpenInNewTab={() => {
-          window.open(verificationInfo.uri, '_blank');
-          setShowVerificationModal(false);
-        }}
         onClose={() => setShowVerificationModal(false)}
+        verificationInfo={verificationInfo}
       />
     </div>
   );

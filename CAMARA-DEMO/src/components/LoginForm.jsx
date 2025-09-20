@@ -1,19 +1,16 @@
-// LoginForm.jsx
 import React from "react";
 
 const LoginForm = ({ 
   username, 
-  password, 
-  useMFA, 
   onUsernameChange, 
-  onPasswordChange, 
-  onMFAChange, 
+  useMFA,
+  onMFAChange,
   onSubmit, 
   loading, 
   error 
 }) => {
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <div className="space-y-6">
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {error}
@@ -36,10 +33,10 @@ const LoginForm = ({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Username
+          Username (email)
         </label>
         <input
-          type="text"
+          type="email"
           value={username}
           onChange={onUsernameChange}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-ping"
@@ -49,24 +46,10 @@ const LoginForm = ({
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Password
-        </label>
-        <input
-          type="password"
-          value={password}
-          onChange={onPasswordChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-ping"
-          placeholder="CamaraDemo123!"
-          required
-          autoComplete="current-password"
-        />
-      </div>
-
       <button
         type="submit"
         disabled={loading}
+        onClick={onSubmit}
         className="w-full bg-blue-500 hover:bg-pingDark text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2"
       >
         {loading ? (
@@ -97,7 +80,7 @@ const LoginForm = ({
           <span>{useMFA ? "Login with MFA" : "Login"}</span>
         )}
       </button>
-    </form>
+    </div>
   );
 };
 

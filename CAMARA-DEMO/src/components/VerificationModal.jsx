@@ -1,14 +1,8 @@
-// VerificationModal.jsx
-import React from "react";
+import React from 'react';
 
-const VerificationModal = ({ 
-  show, 
-  verificationInfo: { uri, code }, 
-  onOpenInNewTab, 
-  onClose 
-}) => {
+const VerificationModal = ({ show, onClose, verificationInfo }) => {
   if (!show) return null;
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
@@ -26,16 +20,16 @@ const VerificationModal = ({
           <div className="bg-gray-50 rounded-lg p-4 mb-4">
             <p className="text-sm text-gray-700 mb-2">Visit this link:</p>
             <a 
-              href={uri} 
+              href={verificationInfo.uri} 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-blue-600 hover:text-blue-800 underline break-all text-sm"
             >
-              {uri}
+              {verificationInfo.uri}
             </a>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(uri);
+                navigator.clipboard.writeText(verificationInfo.uri);
               }}
               className="ml-2 text-xs text-gray-500 hover:text-gray-700 underline"
             >
@@ -48,11 +42,11 @@ const VerificationModal = ({
             <p className="text-sm text-gray-700 mb-2">Enter this code:</p>
             <div className="flex items-center justify-center gap-2">
               <span className="font-mono text-lg font-bold bg-gray-200 px-3 py-2 rounded">
-                {code}
+                {verificationInfo.code}
               </span>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(code);
+                  navigator.clipboard.writeText(verificationInfo.code);
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800 underline"
               >
@@ -64,7 +58,10 @@ const VerificationModal = ({
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
             <button
-              onClick={onOpenInNewTab}
+              onClick={() => {
+                window.open(verificationInfo.uri, '_blank');
+                onClose();
+              }}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition"
             >
               Open in New Tab
