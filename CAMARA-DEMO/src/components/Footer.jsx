@@ -3,9 +3,9 @@ import React from "react";
 
 const Footer = () => {
   return (
-    <div className="mt-8 text-center text-sm text-gray-500">
-      <p>Built by Suraj Karmakar — Ping Identity Team</p>
-      <p className="mt-1">Custom Login Demo (Not for Production)</p>
+    <div className="pt-12 border-t border-zinc-200 text-center">
+      <p className="text-sm text-slate-500 mb-1">Built by Suraj Karmakar — Ping Identity Team</p>
+      <p className="text-xs text-slate-400">Custom Login Demo (Not for Production)</p>
     </div>
   );
 };

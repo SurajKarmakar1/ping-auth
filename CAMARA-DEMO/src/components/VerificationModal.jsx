@@ -4,51 +4,47 @@ const VerificationModal = ({ show, onClose, verificationInfo }) => {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Complete Authentication</h3>
-          <p className="text-gray-600 mb-4">Please verify your identity to continue</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
+        <div className="p-8">
+          <h3 className="text-2xl font-semibold text-slate-900 mb-2 tracking-tight">Complete Authentication</h3>
+          <p className="text-slate-600 mb-8 text-base">Please verify your identity to continue</p>
           
           {/* Verification Link */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <p className="text-sm text-gray-700 mb-2">Visit this link:</p>
-            <a 
-              href={verificationInfo.uri} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 underline break-all text-sm"
-            >
-              {verificationInfo.uri}
-            </a>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(verificationInfo.uri);
-              }}
-              className="ml-2 text-xs text-gray-500 hover:text-gray-700 underline"
-            >
-              Copy Link
-            </button>
+          <div className="border border-zinc-200 rounded-xl p-6 mb-6 bg-zinc-50">
+            <p className="text-sm font-medium text-slate-700 mb-3">Visit this link:</p>
+            <div className="flex gap-3 mb-3">
+              <a 
+                href={verificationInfo.uri} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-slate-900 underline break-all text-sm hover:text-slate-700"
+              >
+                {verificationInfo.uri}
+              </a>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(verificationInfo.uri);
+                }}
+                className="text-sm text-slate-500 hover:text-slate-700 underline"
+              >
+                Copy Link
+              </button>
+            </div>
           </div>
           
           {/* User Code */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-gray-700 mb-2">Enter this code:</p>
-            <div className="flex items-center justify-center gap-2">
-              <span className="font-mono text-lg font-bold bg-gray-200 px-3 py-2 rounded">
+          <div className="border border-zinc-200 rounded-xl p-6 mb-8 bg-zinc-50">
+            <p className="text-sm font-medium text-slate-700 mb-4">Enter this code:</p>
+            <div className="flex items-center justify-center gap-4">
+              <span className="font-mono text-2xl font-semibold bg-white border border-zinc-300 px-6 py-3 rounded-lg">
                 {verificationInfo.code}
               </span>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(verificationInfo.code);
                 }}
-                className="text-sm text-blue-600 hover:text-blue-800 underline"
+                className="text-sm text-slate-900 hover:text-slate-700 underline font-medium"
               >
                 Copy Code
               </button>
@@ -56,21 +52,21 @@ const VerificationModal = ({ show, onClose, verificationInfo }) => {
           </div>
           
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex gap-4">
             <button
               onClick={() => {
                 window.open(verificationInfo.uri, '_blank');
                 onClose();
               }}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition"
+              className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-4 px-6 rounded-lg transition-colors duration-200"
             >
               Open in New Tab
             </button>
             <button
               onClick={onClose}
-              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition"
+              className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-slate-900 font-medium py-4 px-6 rounded-lg transition-colors duration-200"
             >
-              Go back to login page
+              Close
             </button>
           </div>
         </div>
