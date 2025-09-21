@@ -6,6 +6,7 @@ const LoginForm = ({
   useMFA,
   onMFAChange,
   onSubmit, 
+  onRegister,
   loading, 
   error 
 }) => {
@@ -71,6 +72,17 @@ const LoginForm = ({
           <span>{useMFA ? "Initiate MFA Login" : "Initiate Login"}</span>
         )}
       </button>
+
+      <div className="pt-4">
+        <button
+          type="button"
+          onClick={onRegister}
+          disabled={loading}
+          className="w-full bg-white border border-zinc-300 hover:border-zinc-400 focus:ring-2 focus:ring-zinc-500 focus:border-zinc-500 text-zinc-700 font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center shadow-sm"
+        >
+          Create a new account
+        </button>
+      </div>
     </form>
   );
 };

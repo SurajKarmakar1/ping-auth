@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { CLIENT_ID, CLIENT_SECRET, ENVIRONMENT_ID, POLICIES, TOKEN_URL } from '../config/authConfig';
+import { CLIENT_ID, CLIENT_SECRET, ENVIRONMENT_ID, POLICIES, TOKEN_URL, SELF_SERVICE_CLIENT_ID } from '../config/authConfig';
 
 export const useAuth = () => {
   const [accessToken, setAccessToken] = useState('');
@@ -155,6 +155,11 @@ export const useAuth = () => {
     setUseMFA(false);
   }, []);
 
+  const register = useCallback(() => {
+    const selfServiceUrl = `https://apps.pingone.sg/${ENVIRONMENT_ID}/myaccount/`;
+    window.open(selfServiceUrl, '_blank');
+  }, [ENVIRONMENT_ID]);
+
   const closeVerificationModal = useCallback(() => {
     setShowVerificationModal(false);
     setLoading(false);
@@ -173,6 +178,7 @@ export const useAuth = () => {
     handleMFAChange,
     refreshAccessToken,
     logout,
+    register,
     closeVerificationModal,
   };
 };

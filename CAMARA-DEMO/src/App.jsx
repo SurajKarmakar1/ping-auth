@@ -31,6 +31,7 @@ function App() {
             useMFA={auth.useMFA}
             onMFAChange={auth.handleMFAChange}
             onSubmit={auth.login}
+            onRegister={auth.register}
             loading={auth.loading}
             error={auth.error}
           />
