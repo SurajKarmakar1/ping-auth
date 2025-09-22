@@ -156,9 +156,9 @@ export const useAuth = () => {
   }, []);
 
   const register = useCallback(() => {
-    const selfServiceUrl = `https://apps.pingone.sg/${ENVIRONMENT_ID}/myaccount/`;
+    const selfServiceUrl = `https://apps.pingone.sg/${ENVIRONMENT_ID}/myaccount/?client_id=${SELF_SERVICE_CLIENT_ID}`;
     window.open(selfServiceUrl, '_blank');
-  }, [ENVIRONMENT_ID]);
+  }, [ENVIRONMENT_ID, SELF_SERVICE_CLIENT_ID]);
 
   const closeVerificationModal = useCallback(() => {
     setShowVerificationModal(false);
